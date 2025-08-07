@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# Ensures we are within a git repository
+if ! git rev-parse --is-inside-work-tree > /dev/null 2>&1; then
+    echo "Error: Not in a git repository."
+    exit 1
+fi
+
+# Checks for staged changes
+if git diff --quiet --staged; then
+    echo "No staged changes to commit."
+    echo "Use 'git add <file>...' to add changes."
+    exit 1
+fi
+
+
+# Gets the diff of only the staged files
+STAGED_DIFF=$(git diff --staged)
+
+# Get user prompt if provided
+FOCUS="$1"
+if [ -n "$FOCUS" ]; then
+    PROMPT="Generate a concise commit message following the 'Conventional Commits' pattern. Focus: \"$FOCUS\". Here are the changes: <changes>$STAGED_DIFF</changes>"
+else
+    PROMPT="Generate a concise commit message following the 'Conventional Commits' pattern for the following changes: <changes>$STAGED_DIFF</changes>"
+fi
+
+# Generates the commit message with Gemini
+COMMIT_MSG=$(gemini -m gemini-2.5-flash -p "$PROMPT")
+
+# If the response is empty
+if [ -z "$COMMIT_MSG" ]; then
+    echo "Failed to generate commit message from AI."
+    exit 1
+fi
+
+# Displays the generated message in the terminal
+echo "$COMMIT_MSG"
+
+# Copies to the clipboard
+if command -v pbcopy &> /dev/null; then
+    echo "$COMMIT_MSG" | pbcopy
+    CLIP="📋 (copied with pbcopy)"
+elif command -v xclip &> /dev/null; then
+    echo "$COMMIT_MSG" | xclip -selection clipboard
+    CLIP="📋 (copied with xclip)"
+elif command -v xsel &> /dev/null; then
+    echo "$COMMIT_MSG" | xsel --clipboard --input
+    CLIP="📋 (copied with xsel)"
+elif command -v wl-copy &> /dev/null; then
+    echo "$COMMIT_MSG" | wl-copy
+    CLIP="📋 (copied with wl-copy)"
+elif command -v clip.exe &> /dev/null; then
+    echo "$COMMIT_MSG" | clip.exe
+    CLIP="📋 (copied with clip.exe)"
+else
+    CLIP="⚠️ Unable to autocopy (no clipboard commands available)"
+fi
